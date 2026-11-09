@@ -222,8 +222,8 @@ async function api(path, o = {}) {
     headers: Object.assign({ "X-DL-Req": "1", "X-DL-Lang": lang }, o.body !== void 0 ? { "Content-Type": "application/json" } : {}),
     body: o.body !== void 0 ? JSON.stringify(o.body) : void 0
   });
-  if (r.status === 401) throw new LoginNeeded("login");
   const b = await r.json().catch(() => ({}));
+  if (r.status === 401) throw new LoginNeeded(b.twofa ? "twofa" : "login");
   if (!r.ok) throw new Error(b.error || `HTTP ${r.status}`);
   return b;
 }
@@ -2065,7 +2065,7 @@ async function start() {
   try {
     info = await api("/api/vault");
   } catch (e) {
-    return e instanceof LoginNeeded ? loginFirst() : failed(e);
+    return e instanceof LoginNeeded ? loginFirst(e.message) : failed(e);
   }
   if (key) return opened();
   if (!info.key) return info.admin ? setup() : notYet();
@@ -2074,11 +2074,15 @@ async function start() {
 var failed = (e) => {
   main().innerHTML = `<div class="panel empty">${esc(e.message)}</div>`;
 };
-function loginFirst() {
-  main().innerHTML = `<section class="panel vt-gate"><h1>${tr6("Bitte zuerst im Portal anmelden", "Please log in to the portal first")}</h1>
-    <p>${tr6(
-    "Der Tresor nutzt deine Anmeldung im Portal. Melde dich dort an (in einem neuen Tab) und komm dann hierher zur\xFCck.",
-    "The vault uses your portal login. Log in there (in a new tab), then come back here."
+function loginFirst(why) {
+  const code = why === "twofa";
+  main().innerHTML = `<section class="panel vt-gate"><h1>${code ? tr6("Bitte zuerst den Anmeldecode im Portal eingeben", "Please enter your login code in the portal first") : tr6("Bitte zuerst im Portal anmelden", "Please log in to the portal first")}</h1>
+    <p>${code ? tr6(
+    "Dieser Browser hat im Portal noch keinen Anmeldecode eingegeben. \xD6ffne das Portal, gib den Code ein und komm dann hierher zur\xFCck.",
+    "This browser hasn't entered a login code in the portal yet. Open the portal, enter the code, then come back here."
+  ) : tr6(
+    "Der Tresor nutzt deine Anmeldung im Portal. Sie fehlt oder ist abgelaufen \u2013 sie erneuert sich, sobald eine Portal-Seite l\xE4dt. \xD6ffne das Portal (oder lade seinen Tab neu) und komm dann hierher zur\xFCck.",
+    "The vault uses your portal login. It is missing or has expired \u2013 it renews whenever a portal page loads. Open the portal (or reload its tab), then come back here."
   )}</p>
     <p class="vt-row"><a class="btn primary" href="${esc(APP)}/" target="_blank" rel="noopener">${tr6("Portal \xF6ffnen", "Open the portal")}</a>
       <button type="button" id="vtRetry">${tr6("Erneut versuchen", "Try again")}</button></p></section>`;
